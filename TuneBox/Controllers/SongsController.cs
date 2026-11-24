@@ -35,7 +35,7 @@ namespace TuneBox.Controllers
             return Ok(song);
         }
 
-        // GET: api/songs/artist/{artistId}
+        // POST: api/songs
         [HttpPost]
         public ActionResult<SongResponseDto> CreateSong([FromBody] SongCreateUpdateDto newSong)
         {

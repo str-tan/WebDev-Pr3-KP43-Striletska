@@ -1,7 +1,9 @@
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using TuneBox.Models;
+using TuneBox.Options;
 using TuneBox.Profiles;
 using TuneBox.Repositories;
 using TuneBox.Repositories.Interfaces;
@@ -16,6 +18,18 @@ namespace TuneBox
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // Логування через Serilog із конфігурації
+            builder.Logging.ClearProviders();
+            builder.Host.UseSerilog((context, config) =>
+                config.ReadFrom.Configuration(context.Configuration));
+
+            // Конфігурація (шаблон Options)
+            builder.Services.AddOptions<TuneBoxOptions>()
+                .BindConfiguration(TuneBoxOptions.SectionName);
+
+            // Кешування в пам'яті
+            builder.Services.AddMemoryCache();
+
             // Підключення БД
             builder.Services.AddDbContext<TuneBoxDbContext>(options =>
             {
@@ -27,7 +41,7 @@ namespace TuneBox
             {
                 cfg.AddProfile<TuneBoxProfile>();
             });
-                
+
             builder.Services.AddControllers();
 
             // FluentValidation
@@ -59,6 +73,9 @@ namespace TuneBox
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
+
+            // Middleware для логування HTTP-запитів через Serilog
+            app.UseSerilogRequestLogging();
 
             app.UseHttpsRedirection();
             app.UseAuthorization();
