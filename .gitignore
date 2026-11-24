@@ -429,3 +429,6 @@ FodyWeavers.xsd
 *.db
 *.db-shm
 *.db-wal
+
+# Serilog files
+Logs/
