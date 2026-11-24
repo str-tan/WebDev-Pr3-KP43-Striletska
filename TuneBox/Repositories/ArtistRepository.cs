@@ -70,7 +70,7 @@ namespace TuneBox.Repositories
         // Перевірка існування виконавця за ID
         public bool Exists(int id)
         {
-            ArgumentOutOfRangeException.ThrowIfNegative(id);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
             _logger.LogInformation("DB: Checking existence of artist with ID {ArtistId}", id);
             return _context.Artists.Any(a => a.Id == id);
         }
