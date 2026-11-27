@@ -19,7 +19,7 @@ namespace TuneBox.Services
         private readonly IArtistRepository _artistRepository;
         private readonly IMapper _mapper;
         private readonly IMemoryCache _cache;
-        private readonly TuneBoxOptions _options;
+        private readonly IOptionsMonitor<TuneBoxOptions> _optionsMonitor;
         private readonly ILogger<SongService> _logger;
 
         public SongService(
@@ -27,18 +27,18 @@ namespace TuneBox.Services
             IArtistRepository artistRepository,
             IMapper mapper,
             IMemoryCache cache,
-            IOptionsSnapshot<TuneBoxOptions> options,
+            IOptionsMonitor<TuneBoxOptions> optionsMonitor,
             ILogger<SongService> logger)
         {
             _songRepository = songRepository;
             _artistRepository = artistRepository;
             _mapper = mapper;
             _cache = cache;
-            _options = options.Value;
+            _optionsMonitor = optionsMonitor;
             _logger = logger;
         }
 
-        // Отримання всіх пісень (із кешуванням)
+
         public IEnumerable<SongResponseDto> GetAllSongs()
         {
             if (_cache.TryGetValue(AllSongsCacheKey, out IEnumerable<SongResponseDto>? cachedSongs)
@@ -52,12 +52,13 @@ namespace TuneBox.Services
             var songs = _songRepository.GetAll();
             var result = _mapper.Map<IEnumerable<SongResponseDto>>(songs);
 
-            // Збереження результату в кеш на час із конфігурації
-            _cache.Set(AllSongsCacheKey, result, TimeSpan.FromSeconds(_options.CacheDurationSeconds));
+            // Збереження результату в кеш на час із поточної конфігурації
+            var cacheDuration = _optionsMonitor.CurrentValue.CacheDurationSeconds;
+            _cache.Set(AllSongsCacheKey, result, TimeSpan.FromSeconds(cacheDuration));
             return result;
         }
 
-        // Отримання пісні за ID (із кешуванням)
+
         public SongResponseDto? GetSongById(int id)
         {
             var cacheKey = SongCacheKey(id);
@@ -72,11 +73,12 @@ namespace TuneBox.Services
             if (song == null) return null;
 
             var result = _mapper.Map<SongResponseDto>(song);
-            _cache.Set(cacheKey, result, TimeSpan.FromSeconds(_options.CacheDurationSeconds));
+            var cacheDuration = _optionsMonitor.CurrentValue.CacheDurationSeconds;
+            _cache.Set(cacheKey, result, TimeSpan.FromSeconds(cacheDuration));
             return result;
         }
 
-        // Створення нової пісні (з перевіркою обмежень конфігурації)
+
         public (SongResponseDto? SongDto, string? ErrorMessage) CreateSong(SongCreateUpdateDto newSongDto)
         {
             if (!_artistRepository.Exists(newSongDto.ArtistId))
@@ -84,25 +86,27 @@ namespace TuneBox.Services
                 return (null, $"Artist with ID {newSongDto.ArtistId} does not exist.");
             }
 
-            // Перевірка максимальної тривалості пісні з конфігурації
-            if (newSongDto.Duration > _options.MaxSongDurationSeconds)
+            var options = _optionsMonitor.CurrentValue;
+
+            // Перевірка максимальної тривалості пісні з поточної конфігурації
+            if (newSongDto.Duration > options.MaxSongDurationSeconds)
             {
                 _logger.LogWarning(
                     "Blocked song creation: duration {Duration}s exceeds MaxSongDurationSeconds ({Limit}s)",
-                    newSongDto.Duration, _options.MaxSongDurationSeconds);
+                    newSongDto.Duration, options.MaxSongDurationSeconds);
 
-                return (null, $"Song duration ({newSongDto.Duration}s) exceeds the maximum allowed limit ({_options.MaxSongDurationSeconds}s).");
+                return (null, $"Song duration ({newSongDto.Duration}s) exceeds the maximum allowed limit ({options.MaxSongDurationSeconds}s).");
             }
 
             // Перевірка ліміту кількості пісень у виконавця
             var currentSongCount = _songRepository.GetByArtistId(newSongDto.ArtistId).Count();
-            if (currentSongCount >= _options.MaxSongsPerArtist)
+            if (currentSongCount >= options.MaxSongsPerArtist)
             {
                 _logger.LogWarning(
                     "Blocked song creation for artist {ArtistId}: reached MaxSongsPerArtist limit ({Limit})",
-                    newSongDto.ArtistId, _options.MaxSongsPerArtist);
+                    newSongDto.ArtistId, options.MaxSongsPerArtist);
 
-                return (null, $"Artist with ID {newSongDto.ArtistId} already has the maximum allowed number of songs ({_options.MaxSongsPerArtist}).");
+                return (null, $"Artist with ID {newSongDto.ArtistId} already has the maximum allowed number of songs ({options.MaxSongsPerArtist}).");
             }
 
             var song = _mapper.Map<Song>(newSongDto);
@@ -115,7 +119,7 @@ namespace TuneBox.Services
             return (_mapper.Map<SongResponseDto>(song), null);
         }
 
-        // Оновлення пісні (з перевіркою обмежень конфігурації)
+
         public (bool IsSuccess, bool IsNotFound, string? ErrorMessage) UpdateSong(int id, SongCreateUpdateDto updatedSongDto)
         {
             var existingSong = _songRepository.GetById(id);
@@ -126,14 +130,16 @@ namespace TuneBox.Services
                 return (false, false, $"Artist with ID {updatedSongDto.ArtistId} does not exist.");
             }
 
-            // Перевірка максимальної тривалості пісні з конфігурації
-            if (updatedSongDto.Duration > _options.MaxSongDurationSeconds)
+            var options = _optionsMonitor.CurrentValue;
+
+            // Перевірка максимальної тривалості пісні з поточної конфігурації
+            if (updatedSongDto.Duration > options.MaxSongDurationSeconds)
             {
                 _logger.LogWarning(
                     "Blocked updating song {SongId}: duration {Duration}s exceeds MaxSongDurationSeconds ({Limit}s)",
-                    id, updatedSongDto.Duration, _options.MaxSongDurationSeconds);
+                    id, updatedSongDto.Duration, options.MaxSongDurationSeconds);
 
-                return (false, false, $"Song duration ({updatedSongDto.Duration}s) exceeds the maximum allowed limit ({_options.MaxSongDurationSeconds}s).");
+                return (false, false, $"Song duration ({updatedSongDto.Duration}s) exceeds the maximum allowed limit ({options.MaxSongDurationSeconds}s).");
             }
 
             // Якщо пісню переносять до іншого виконавця — перевіряємо його ліміт пісень
@@ -141,13 +147,13 @@ namespace TuneBox.Services
             if (oldArtistId != updatedSongDto.ArtistId)
             {
                 var targetSongCount = _songRepository.GetByArtistId(updatedSongDto.ArtistId).Count();
-                if (targetSongCount >= _options.MaxSongsPerArtist)
+                if (targetSongCount >= options.MaxSongsPerArtist)
                 {
                     _logger.LogWarning(
                         "Blocked moving song {SongId} to artist {ArtistId}: reached MaxSongsPerArtist limit ({Limit})",
-                        id, updatedSongDto.ArtistId, _options.MaxSongsPerArtist);
+                        id, updatedSongDto.ArtistId, options.MaxSongsPerArtist);
 
-                    return (false, false, $"Artist with ID {updatedSongDto.ArtistId} already has the maximum allowed number of songs ({_options.MaxSongsPerArtist}).");
+                    return (false, false, $"Artist with ID {updatedSongDto.ArtistId} already has the maximum allowed number of songs ({options.MaxSongsPerArtist}).");
                 }
             }
 
@@ -163,7 +169,7 @@ namespace TuneBox.Services
             return (true, false, null);
         }
 
-        // Видалення пісні
+
         public bool DeleteSong(int id)
         {
             var songToRemove = _songRepository.GetById(id);
@@ -180,7 +186,7 @@ namespace TuneBox.Services
             return true;
         }
 
-        // Видалення всіх пісень
+
         public void DeleteAllSongs()
         {
             _songRepository.DeleteAll();

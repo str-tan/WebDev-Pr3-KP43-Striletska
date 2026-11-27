@@ -21,7 +21,7 @@ namespace TuneBox.Services
         private readonly ISongRepository _songRepository;
         private readonly IMapper _mapper;
         private readonly IMemoryCache _cache;
-        private readonly TuneBoxOptions _options;
+        private readonly IOptionsMonitor<TuneBoxOptions> _optionsMonitor;
         private readonly ILogger<ArtistService> _logger;
 
         public ArtistService(
@@ -29,14 +29,14 @@ namespace TuneBox.Services
             ISongRepository songRepository,
             IMapper mapper,
             IMemoryCache cache,
-            IOptionsSnapshot<TuneBoxOptions> options,
+            IOptionsMonitor<TuneBoxOptions> optionsMonitor,
             ILogger<ArtistService> logger)
         {
             _artistRepository = artistRepository;
             _songRepository = songRepository;
             _mapper = mapper;
             _cache = cache;
-            _options = options.Value;
+            _optionsMonitor = optionsMonitor;
             _logger = logger;
         }
 
@@ -54,12 +54,13 @@ namespace TuneBox.Services
             var artists = _artistRepository.GetAll();
             var result = _mapper.Map<IEnumerable<ArtistResponseDto>>(artists);
 
-            // Збереження результату в кеш на час із конфігурації
-            _cache.Set(AllArtistsCacheKey, result, TimeSpan.FromSeconds(_options.CacheDurationSeconds));
+            // Збереження результату в кеш на час із поточної конфігурації
+            var cacheDuration = _optionsMonitor.CurrentValue.CacheDurationSeconds;
+            _cache.Set(AllArtistsCacheKey, result, TimeSpan.FromSeconds(cacheDuration));
             return result;
         }
 
-        // Отримання виконавця за ID (із кешуванням)
+
         public ArtistResponseDto? GetArtistById(int id)
         {
             var cacheKey = ArtistCacheKey(id);
@@ -74,11 +75,12 @@ namespace TuneBox.Services
             if (artist == null) return null;
 
             var result = _mapper.Map<ArtistResponseDto>(artist);
-            _cache.Set(cacheKey, result, TimeSpan.FromSeconds(_options.CacheDurationSeconds));
+            var cacheDuration = _optionsMonitor.CurrentValue.CacheDurationSeconds;
+            _cache.Set(cacheKey, result, TimeSpan.FromSeconds(cacheDuration));
             return result;
         }
 
-        // Створення нового виконавця
+
         public ArtistResponseDto CreateArtist(ArtistCreateUpdateDto newArtistDto)
         {
             var artist = _mapper.Map<Artist>(newArtistDto);
@@ -89,7 +91,7 @@ namespace TuneBox.Services
             return _mapper.Map<ArtistResponseDto>(artist);
         }
 
-        // Оновлення виконавця
+
         public bool UpdateArtist(int id, ArtistCreateUpdateDto updatedArtistDto)
         {
             var existingArtist = _artistRepository.GetById(id);
@@ -104,7 +106,7 @@ namespace TuneBox.Services
             return true;
         }
 
-        // Видалення виконавця
+
         public bool DeleteArtist(int id)
         {
             var artistToRemove = _artistRepository.GetById(id);
@@ -132,7 +134,7 @@ namespace TuneBox.Services
             return true;
         }
 
-        // Видалення всіх виконавців
+
         public void DeleteAllArtists()
         {
             _artistRepository.DeleteAll();
@@ -144,7 +146,7 @@ namespace TuneBox.Services
             }
         }
 
-        // Отримання всіх пісень конкретного виконавця (із кешуванням)
+
         public IEnumerable<SongResponseDto>? GetSongsByArtist(int id)
         {
             var cacheKey = ArtistSongsCacheKey(id);
@@ -161,7 +163,8 @@ namespace TuneBox.Services
             var songs = _songRepository.GetByArtistId(id);
             var result = _mapper.Map<IEnumerable<SongResponseDto>>(songs);
 
-            _cache.Set(cacheKey, result, TimeSpan.FromSeconds(_options.CacheDurationSeconds));
+            var cacheDuration = _optionsMonitor.CurrentValue.CacheDurationSeconds;
+            _cache.Set(cacheKey, result, TimeSpan.FromSeconds(cacheDuration));
             return result;
         }
     }

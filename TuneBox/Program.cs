@@ -18,6 +18,9 @@ namespace TuneBox
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            //Відстеження змін у appsettings.json без перезапуску
+            builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+
             // Логування через Serilog із конфігурації
             builder.Logging.ClearProviders();
             builder.Host.UseSerilog((context, config) =>

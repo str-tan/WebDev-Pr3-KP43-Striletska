@@ -14,14 +14,14 @@ namespace TuneBox.Repositories
             _logger = logger;
         }
 
-        // Отримання всіх виконавців із БД
+ 
         public IEnumerable<Artist> GetAll()
         {
             _logger.LogInformation("DB: Fetching all artists");
             return _context.Artists.ToList();
         }
 
-        // Отримання виконавця за ID із БД
+
         public Artist? GetById(int id)
         {
             _logger.LogInformation("DB: Fetching artist with ID {ArtistId}", id);
@@ -35,7 +35,7 @@ namespace TuneBox.Repositories
             return artist;
         }
 
-        // Додавання нового виконавця в БД
+
         public void Add(Artist artist)
         {
             _context.Artists.Add(artist);
@@ -43,7 +43,7 @@ namespace TuneBox.Repositories
             _logger.LogInformation("Artist {ArtistId} ({ArtistName}) created successfully", artist.Id, artist.Name);
         }
 
-        // Оновлення виконавця в БД
+
         public void Update(Artist artist)
         {
             _context.Artists.Update(artist);
@@ -51,7 +51,7 @@ namespace TuneBox.Repositories
             _logger.LogInformation("Artist {ArtistId} updated successfully", artist.Id);
         }
 
-        // Видалення виконавця з БД
+
         public void Delete(Artist artist)
         {
             _context.Artists.Remove(artist);
@@ -59,7 +59,7 @@ namespace TuneBox.Repositories
             _logger.LogInformation("Artist {ArtistId} deleted successfully", artist.Id);
         }
 
-        // Видалення всіх виконавців із БД
+
         public void DeleteAll()
         {
             _context.Artists.RemoveRange(_context.Artists);
@@ -67,7 +67,7 @@ namespace TuneBox.Repositories
             _logger.LogWarning("All artists were deleted from database");
         }
 
-        // Перевірка існування виконавця за ID
+
         public bool Exists(int id)
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
